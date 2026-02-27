@@ -58,14 +58,18 @@ def process_inputs(report):
     current_state['select'] = bool(report[6] & 16)
     current_state['start'] = bool(report[6] & 32)
 
-    # D. A Mágica de Pressionar e Soltar Teclas!
+    # D. A Mágica de Pressionar e Soltar Teclas (COM HOLD FORÇADO)
     for button, is_pressed in current_state.items():
         virtual_key = KEY_MAP[button]
 
-        # Se eu apertei agora (está pressionado, mas não estava antes)
-        if is_pressed and not previous_state[button]:
+        # SE O BOTÃO ESTIVER APERTADO (Não importa se foi agora ou antes)
+        if is_pressed:
+            # Continua enviando o sinal de "pressionado" repetidas vezes
             keyboard_controller.press(virtual_key)
-            print(f"[{button}] Pressed -> Key '{virtual_key}'")
+            
+            # Imprime no console apenas na primeira vez para não fludar a tela
+            if not previous_state[button]:
+                print(f"[{button}] Pressed -> Key '{virtual_key}'")
         
         # Se eu soltei agora (não está pressionado, mas estava antes)
         elif not is_pressed and previous_state[button]:
