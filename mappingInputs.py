@@ -5,7 +5,7 @@ import time
 VENDOR_ID = 0x0810
 PRODUCT_ID = 0x0001
 
-print(f"A procurar pelo comando (VID: {hex(VENDOR_ID)}, PID: {hex(PRODUCT_ID)})...")
+print(f"Searching for the command (VID: {hex(VENDOR_ID)}, PID: {hex(PRODUCT_ID)})...")
 
 try:
 	# Inicializa o dispositivo
@@ -15,8 +15,7 @@ try:
 	# Ativa o modo não-bloqueante para o loop correr suavemente
 	gamepad.set_nonblocking(True)
 	
-	print("Comando conectado com sucesso! Prima os botões para ver os dados...")
-	print("Prima Ctrl+C no teclado para sair.\n")
+	print("Connected!")
 
 	# Guarda o último estado do comando (começa vazio)
 	last_report = None
@@ -33,9 +32,9 @@ try:
 			
 			# Compara lista com lista!
 			if report == static_report:
-				print("Estado: Static (Controle parado)")
+				print("(No Button Pressed)")
 			else:
-				print(f"Estado alterado: {report}")
+				print(f"(REPORT) Button Pressed: {report}")
 			
 			# Atualiza a nossa "memória" com o novo estado
 			last_report = report
@@ -44,11 +43,9 @@ try:
 		time.sleep(0.01)
 		
 except IOError as ex:
-	print(f"Erro ao ligar ao comando: {ex}")
-	print("Verifique se o comando está ligado à porta USB.")
+    print(f"Error: Controller not found. {ex}")
 except KeyboardInterrupt:
-	print("\nA encerrar o programa...")
+    print("\nProgram terminated.")
 finally:
-	# Fecha a ligação de forma segura
-	if 'gamepad' in locals():
-		gamepad.close()
+    if 'gamepad' in locals():
+        gamepad.close()
