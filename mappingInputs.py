@@ -5,7 +5,7 @@ import time
 VENDOR_ID = 0x0810
 PRODUCT_ID = 0x0001
 
-print(f"Searching for the command (VID: {hex(VENDOR_ID)}, PID: {hex(PRODUCT_ID)})...")
+print(f"Searching for the gamepad (VID: {hex(VENDOR_ID)}, PID: {hex(PRODUCT_ID)})...")
 
 try:
 	# Inicializa o dispositivo
