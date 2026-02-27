@@ -1,83 +1,103 @@
 import hid
 import time
+from pynput.keyboard import Controller, Key
 
-# Estes são os IDs exatos tirados da UBS Device Tree em System Information. (USB GAMEPAD)
+# IDs do seu controle chinês
 VENDOR_ID = 0x0810
 PRODUCT_ID = 0x0001
 
-print(f"Searching for the commands (VID: {hex(VENDOR_ID)}, PID: {hex(PRODUCT_ID)})...")
+# Cria o nosso teclado virtual
+teclado = Controller()
+
+# ---------------------------------------------------------
+# 1. MAPA DE TECLAS: O que o controle vai simular no teclado?
+# Mude as letras abaixo para as que você configurou no Delta.
+# ---------------------------------------------------------
+MAPA_TECLAS = {
+    'up': 'w',
+    'down': 's',
+    'left': 'a',
+    'right': 'd',
+    'A': 'l',
+    'B': 'k',
+    'X': 'i',
+    'Y': 'j',
+    'L': 'q',
+    'R': 'e',
+    'start': Key.enter,   # Teclas especiais usam o "Key."
+    'select': Key.space
+}
+
+# ---------------------------------------------------------
+# 2. MEMÓRIA: Guarda o que está apertado e o que não está
+# ---------------------------------------------------------
+# Começamos assumindo que nenhum botão está apertado
+estado_atual = {botao: False for botao in MAPA_TECLAS}
+estado_anterior = {botao: False for botao in MAPA_TECLAS}
+
+def processar_inputs(report):
+    if not report:
+        return
+
+    # A. Lê as Setinhas (Índices 3 e 4)
+    estado_atual['left']  = (report[3] == 0)
+    estado_atual['right'] = (report[3] == 255)
+    estado_atual['up']    = (report[4] == 0)
+    estado_atual['down']  = (report[4] == 255)
+
+    # B. Lê os Botões de Ação (Índice 5)
+    # Usamos o operador "&" (Bitwise AND) para checar se o valor do botão está dentro do número misturado
+    estado_atual['X'] = bool(report[5] & 16)
+    estado_atual['A'] = bool(report[5] & 32)
+    estado_atual['B'] = bool(report[5] & 64)
+    estado_atual['Y'] = bool(report[5] & 128)
+
+    # C. Lê os Botões Menu e Ombro (Índice 6)
+    estado_atual['L'] = bool(report[6] & 1)
+    estado_atual['R'] = bool(report[6] & 2)
+    estado_atual['select'] = bool(report[6] & 16)
+    estado_atual['start'] = bool(report[6] & 32)
+
+    # D. A Mágica de Pressionar e Soltar Teclas!
+    for botao, esta_pressionado in estado_atual.items():
+        tecla_virtual = MAPA_TECLAS[botao]
+
+        # Se eu apertei agora (está pressionado, mas não estava antes)
+        if esta_pressionado and not estado_anterior[botao]:
+            teclado.press(tecla_virtual)
+            print(f"[{botao}] Pressionado -> Tecla '{tecla_virtual}'")
+        
+        # Se eu soltei agora (não está pressionado, mas estava antes)
+        elif not esta_pressionado and estado_anterior[botao]:
+            teclado.release(tecla_virtual)
+            print(f"[{botao}] Solto")
+        
+        # Atualiza a memória para o próximo ciclo
+        estado_anterior[botao] = esta_pressionado
+
+# ---------------------------------------------------------
+# 3. O LOOP PRINCIPAL
+# ---------------------------------------------------------
+print("Iniciando o Tradutor de Controle...")
 
 try:
-    # Inicializa o dispositivo
     gamepad = hid.device()
     gamepad.open(VENDOR_ID, PRODUCT_ID)
-    
-    # Ativa o modo não-bloqueante para o loop correr suavemente
     gamepad.set_nonblocking(True)
     
-    print("Connected!")
-
-    # Guarda o último estado do comando (começa vazio)
-    last_report = None
+    print("Sucesso! O seu controle agora é um teclado.")
+    print("Minimize esta tela e vá jogar! (Pressione Ctrl+C aqui para parar).")
 
     while True:
-        # Lê o pacote de dados do comando
-        report = gamepad.read(64)
-        
-        # Se recebeu dados E esses dados forem diferentes dos últimos que vimos:
-        if report and report != last_report:
-            print(f"New Report: {report}")
-            
-            # Atualiza a nossa "memória" com o novo estado
-            last_report = report
-        
-        # Pausa para não sobrecarregar o processador
-        time.sleep(0.01)
+        dados = gamepad.read(64)
+        if dados:
+            processar_inputs(dados)
+        time.sleep(0.005) # Loop bem rápido para não ter "lag" no jogo
 
 except IOError as ex:
-    print(f"Erro ao ligar ao comando: {ex}")
-    print("Verifique se o comando está ligado à porta USB.")
+    print(f"Erro: Não encontrei o controle. {ex}")
 except KeyboardInterrupt:
-    print("\nA encerrar o programa...")
+    print("\nPrograma encerrado.")
 finally:
-    # Fecha a ligação de forma segura
     if 'gamepad' in locals():
         gamepad.close()
-
-
-# MAPPING BUTTONS:
-#-----------------------------------------------------------------------------------------------------------------------------#
-#   INPUT       |          MAPPING BUTTONS:                                                                                   #
-#               |                                                                                                             #
-#   static      |         [1, 128, 128, 127, 127, 15, 0, 0]                                                                   #
-#               |                                                                                                             #
-#   arrow_up    |         [1, 128, 128, 127, 0, 15, 0, 0]                                                                     #
-#   arrow_down  |         [1, 128, 128, 127, 255, 15, 0, 0]                                                                   #
-#   arrow_left  |         [1, 128, 128, 0, 127, 15, 0, 0]                                                                     #
-#   arrow_right |         [1, 128, 128, 255, 127, 15, 0, 0]                                                                   #
-#                                                                                                                             #
-#   A           |         [1, 128, 128, 127, 127, 47, 0, 0]                                                                   #
-#   B           |         [1, 128, 128, 127, 127, 79, 0, 0]                                                                   #
-#   Y           |         [1, 128, 128, 127, 127, 143, 0, 0]                                                                  #
-#   X           |         [1, 128, 128, 127, 127, 31, 0, 0]                                                                   #
-#                                                                                                                             #
-#   start       |         [1, 128, 128, 127, 127, 15, 32, 0]                                                                  #
-#   select      |         [1, 128, 128, 127, 127, 15, 16, 0]                                                                  #
-#                                                                                                                             #
-#   L           |         [1, 128, 128, 127, 127, 15, 1, 0]                                                                   #
-#   R           |         [1, 128, 128, 127, 127, 15, 2, 0]                                                                   #
-#                                                                                                                             #
-#-----------------------------------------------------------------------------------------------------------------------------#
-
-
-# COMBINATIONS: (ANALYSIS NOT FINISHED)
-#-----------------------------------------------------------------------------------------------------------------------------#
-#   L + R       |         [1, 128, 128, 127, 127, 15, 3, 0]                                                                   #
-#   B + A       |         [1, 128, 128, 127, 127, 111, 0, 0]                                                                  #
-#   Y + X       |         [1, 128, 128, 127, 127, 159, 0, 0]                                                                  #
-#                                                                                                                             #
-#-----------------------------------------------------------------------------------------------------------------------------#
-
-
-
-
