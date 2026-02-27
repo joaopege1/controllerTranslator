@@ -86,7 +86,6 @@ try:
     gamepad.set_nonblocking(True)
     
     print("Sucesso! O seu controle agora é um teclado.")
-    print("Minimize esta tela e vá jogar! (Pressione Ctrl+C aqui para parar).")
 
     while True:
         dados = gamepad.read(64)
