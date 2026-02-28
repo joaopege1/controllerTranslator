@@ -1,7 +1,7 @@
 import hid
 import time
 from pynput.keyboard import Controller, Key
-from controllerGetter import detectar_controle_automaticamente
+from controllerGetter import detect_controllers
 
 # ---------------------------------------------------------
 # 1. SETUP: Criação do teclado virtual e Mapa de Teclas
@@ -33,19 +33,19 @@ def process_inputs(report):
     if not report:
         return
 
-    # A. Lê as Setinhas
+    # A. MOVEMENT
     current_state['left']  = (report[3] == 0)
     current_state['right'] = (report[3] == 255)
     current_state['up']    = (report[4] == 0)
     current_state['down']  = (report[4] == 255)
 
-    # B. Lê os Botões de Ação
+    # B. A, B, X, Y
     current_state['X'] = bool(report[5] & 16)
     current_state['A'] = bool(report[5] & 32)
     current_state['B'] = bool(report[5] & 64)
     current_state['Y'] = bool(report[5] & 128)
 
-    # C. Lê os Botões Menu e Ombro
+    # C. L, R, START
     current_state['L'] = bool(report[6] & 1)
     current_state['R'] = bool(report[6] & 2)
     current_state['select'] = bool(report[6] & 16)
@@ -78,7 +78,7 @@ try:
     # 1. Busca os IDs usando o SEU arquivo externo!
     VENDOR_ID, PRODUCT_ID = detect_controllers()
     
-    # Se não achou, encerra o programa graciosamente
+    # Se não achou, encerra o programa
     if VENDOR_ID is None or PRODUCT_ID is None:
         print("Finishing the program. Try connecting the controller and try again.")
         exit()
