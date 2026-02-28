@@ -1,5 +1,5 @@
 ```markdown
-# 🎮 Generic USB Controller Translator (macOS)
+# Generic USB Controller Translator (macOS)
 
 A lightweight Python software that reads raw USB HID data from generic gamepads (like cheap SNES USB clones) and translates them into continuous keyboard inputs. 
 
