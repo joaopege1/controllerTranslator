@@ -8,6 +8,8 @@ This project was built specifically to bypass macOS's strict native GameControll
 ## Features
 * **Raw HID Reading:** Bypasses the OS and reads data directly from the USB port.
 * **Auto-Detection:** Automatically scans and connects to gamepads (no hardcoding Vendor/Product IDs required).
+* **Multiplayer Support:** Connect up to 2 USB controllers simultaneously with independent key mappings for each player.
+* **Per-Player Key Mapping:** Each connected controller has its own customizable key map for flexible multiplayer gaming.
 * **Hold-State Support:** Continuously spams the keystroke while a button is held down (essential for running/jumping in platformers like Super Mario).
 * **Zero Input Lag:** Runs an optimized non-blocking loop for instantaneous response times.
 
@@ -43,7 +45,7 @@ pip install hidapi pynput
 
 ## Usage
 
-1. Plug in your USB Controller.
+1. **Plug in your USB Controller(s)** – you can connect up to 2 controllers simultaneously.
 2. Run the main script:
 ```bash
 python3 main.py
@@ -59,34 +61,45 @@ python3 main.py
 
 4. Minimize the terminal and open your emulator!
 
+5. **For Multiplayer:** Once both controllers are plugged in, the script will automatically detect and assign them as Player 1 and Player 2, using separate key mappings for each.
+
 ## ⚙️ Configuration (Key Mapping)
 
-You can easily change which controller button presses which keyboard key. Open `main.py` and modify the `KEY_MAP` dictionary to match your emulator's settings:
+You can easily customize which controller button presses which keyboard key. Open `main.py` and modify the `MAPS_PER_PLAYER` list. Each element in the list corresponds to a connected player:
 
 ```python
-KEY_MAP = {
-    'up': 'w',
-    'down': 's',
-    'left': 'a',
-    'right': 'd',
-    'A': 'l',
-    'B': 'k',
-    'X': 'i',
-    'Y': 'j',
-    'start': Key.enter,   # Use Key.xyz for special keys
-    'select': Key.space
-}
-
+MAPS_PER_PLAYER = [
+    { # PLAYER 1
+        'up': 'w', 'down': 's', 'left': 'a', 'right': 'd',
+        'A': 'l', 'B': 'k', 'X': 'i', 'Y': 'j',
+        'L': 'q', 'R': 'e', 'start': Key.enter, 'select': Key.space
+    },
+    { # PLAYER 2
+        'up': Key.up, 'down': Key.down, 'left': Key.left, 'right': Key.right,
+        'A': 'v', 'B': 'c', 'X': 'f', 'Y': 'x',
+        'L': '1', 'R': '2', 'start': '3', 'select': '4'
+    }
+]
 ```
+
+**Note:** The system supports up to 2 players. Add or remove player mappings as needed. Use regular characters like `'w'` or `Key.enter` for special keys.
 
 ## File Structure
 
-* `main.py`: The core loop. Handles the state memory (pressed/released) and triggers the virtual keyboard using `pynput`.
-* `controllerGetter.py`: Contains the auto-detection logic (`hid.enumerate()`) to find the Vendor ID and Product ID of your controller automatically based on keyword matching.
+* `main.py`: The core multiplayer loop. Handles independent state memory for each player and triggers virtual keyboard presses using `pynput`.
+* `controllerGetter.py`: Contains the auto-detection logic (`hid.enumerate()`) to find and connect to available gamepads automatically based on keyword matching.
+* `translator.py`: Alternative implementation with multiplayer support built-in for streamlined controller-to-keyboard translation.
+* `mappingAndTesting/` directory:
+  * `mapping.py`: Reference documentation showing the raw HID data patterns for each controller button and combination.
+  * `unlimitedOutputs.py`: Debugging utility to display raw HID data received from a specific controller (useful for reverse-engineering unmapped controllers).
+  * `mappingInputs.py`: Testing tool for input validation and mapping verification.
 
 ## Troubleshooting
 
 * **`ImportError: Unable to load any of the following libraries: libhidapi.dylib`**: You installed the `hid` package instead of `hidapi`, or you forgot to run `brew install hidapi`. Run `pip uninstall hid` followed by `pip install hidapi`.
 * **The terminal says "Pressed" but the game isn't responding:** You haven't granted Accessibility permissions in macOS System Settings.
 * **The character only moves one step when I hold the D-pad:** Ensure you are using the latest version of `main.py` which includes the "Forced Hold" logic (bypassing macOS's default key-repeat disabling).
+* **My second controller isn't detected:** Make sure both controllers are plugged in before running the script. The system detects available controllers at startup. If detection fails, verify they appear in `System Information > USB`.
+* **Player 2 inputs are not working:** Check that you've customized the `MAPS_PER_PLAYER` list with appropriate key bindings for Player 2 in `main.py`.
+* **Need to debug controller inputs?** Use `unlimitedOutputs.py` in the `mappingAndTesting/` directory to see raw HID data from your controller and verify button mappings.
 
