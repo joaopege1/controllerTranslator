@@ -3,104 +3,113 @@ import time
 from pynput.keyboard import Controller, Key
 from controllerGetter import detect_controllers
 
-# ---------------------------------------------------------
-# 1. SETUP: Criação do teclado virtual e Mapa de Teclas
-# ---------------------------------------------------------
 keyboard_controller = Controller()
 
-KEY_MAP = {
-    'up': 'w',
-    'down': 's',
-    'left': 'a',
-    'right': 'd',
-    'A': 'l',
-    'B': 'k',
-    'X': 'i',
-    'Y': 'j',
-    'L': 'q',
-    'R': 'e',
-    'start': Key.enter,
-    'select': Key.space
-}
+# ---------------------------------------------------------
+# 1. MAPAS DE TECLAS (Player 1 e Player 2)
+# ---------------------------------------------------------
+MAPS_PER_PLAYER = [
+    { # PLAYER 1 (Exatamente como você já tinha)
+        'up': 'w', 'down': 's', 'left': 'a', 'right': 'd',
+        'A': 'l', 'B': 'k', 'X': 'i', 'Y': 'j',
+        'L': 'q', 'R': 'e', 'start': Key.enter, 'select': Key.space
+    },
+    { # PLAYER 2 (Use as setinhas do teclado e outras letras)
+        'up': Key.up, 'down': Key.down, 'left': Key.left, 'right': Key.right,
+        'A': 'v', 'B': 'c', 'X': 'f', 'Y': 'x',
+        'L': '1', 'R': '2', 'start': '3', 'select': '4'
+    }
+]
 
 # ---------------------------------------------------------
-# 2. MEMÓRIA: Guarda o que está apertado e o que não está
+# 2. MEMÓRIA: Separada para cada jogador
 # ---------------------------------------------------------
-current_state = {button: False for button in KEY_MAP}
-previous_state = {button: False for button in KEY_MAP}
+# Cria uma lista com duas "memórias" separadas
+current_state = [{button: False for button in mapping} for mapping in MAPS_PER_PLAYER]
+previous_state = [{button: False for button in mapping} for mapping in MAPS_PER_PLAYER]
 
-def process_inputs(report):
+def process_inputs(report, player_id):
     if not report:
         return
 
-    # A. MOVEMENT
-    current_state['left']  = (report[3] == 0)
-    current_state['right'] = (report[3] == 255)
-    current_state['up']    = (report[4] == 0)
-    current_state['down']  = (report[4] == 255)
+    # Pega o mapa e a memória específicos deste jogador
+    player_current_state = current_state[player_id]
+    player_previous_state = previous_state[player_id]
+    key_map = MAPS_PER_PLAYER[player_id]
 
-    # B. A, B, X, Y
-    current_state['X'] = bool(report[5] & 16)
-    current_state['A'] = bool(report[5] & 32)
-    current_state['B'] = bool(report[5] & 64)
-    current_state['Y'] = bool(report[5] & 128)
+    # Lê os botões (A lógica matemática é igualzinha!)
+    player_current_state['left']  = (report[3] == 0)
+    player_current_state['right'] = (report[3] == 255)
+    player_current_state['up']    = (report[4] == 0)
+    player_current_state['down']  = (report[4] == 255)
 
-    # C. L, R, START
-    current_state['L'] = bool(report[6] & 1)
-    current_state['R'] = bool(report[6] & 2)
-    current_state['select'] = bool(report[6] & 16)
-    current_state['start'] = bool(report[6] & 32)
+    player_current_state['X'] = bool(report[5] & 16)
+    player_current_state['A'] = bool(report[5] & 32)
+    player_current_state['B'] = bool(report[5] & 64)
+    player_current_state['Y'] = bool(report[5] & 128)
 
-    # D. A Mágica de Pressionar e Soltar Teclas (COM HOLD FORÇADO)
-    for button, is_pressed in current_state.items():
-        virtual_key = KEY_MAP[button]
+    player_current_state['L'] = bool(report[6] & 1)
+    player_current_state['R'] = bool(report[6] & 2)
+    player_current_state['select'] = bool(report[6] & 16)
+    player_current_state['start'] = bool(report[6] & 32)
 
-        # SE O BOTÃO ESTIVER APERTADO
+    # Executa os toques de teclado
+    for button, is_pressed in player_current_state.items():
+        virtual_key = key_map[button]
+
         if is_pressed:
             keyboard_controller.press(virtual_key)
-            if not previous_state[button]:
-                print(f"[{button}] Pressed -> Key '{virtual_key}'")
+            if not player_previous_state[button]:
+                print(f"[P{player_id + 1}] {button} Pressed -> Key '{virtual_key}'")
         
-        # Se eu soltei agora
-        elif not is_pressed and previous_state[button]:
+        elif not is_pressed and player_previous_state[button]:
             keyboard_controller.release(virtual_key)
-            print(f"[{button}] Released")
+            print(f"[P{player_id + 1}] {button} Released")
         
-        # Atualiza a memória
-        previous_state[button] = is_pressed
+        player_previous_state[button] = is_pressed
 
 # ---------------------------------------------------------
-# 3. O LOOP PRINCIPAL
+# 3. O LOOP PRINCIPAL MULTIPLAYER
 # ---------------------------------------------------------
-print("Starting Controller Translator...")
+print("Starting the program")
+
+open_controllers = []
 
 try:
-    # 1. Busca os IDs usando o SEU arquivo externo!
-    VENDOR_ID, PRODUCT_ID = detect_controllers()
+    # 1. Busca todos os controles conectados
+    controller_list = detect_controllers()
     
-    # Se não achou, encerra o programa
-    if VENDOR_ID is None or PRODUCT_ID is None:
-        print("Finishing the program. Try connecting the controller and try again.")
+    if not controller_list:
+        print("No controllers found.")
         exit()
 
-    # 2. Conecta usando os IDs dinâmicos
-    gamepad = hid.device()
-    gamepad.open(VENDOR_ID, PRODUCT_ID)
-    gamepad.set_nonblocking(True)
-    
-    print("Success! Your controller is now a keyboard.")
+    # 2. Abre a conexão com cada controle encontrado (Máximo de 2 para bater com nossos mapas)
+    for index, controller_info in enumerate(controller_list[:2]):
+        gamepad = hid.device()
+        gamepad.open_path(controller_info['path']) # Abrindo pelo CAMINHO DA PORTA, não pelo ID!
+        gamepad.set_nonblocking(True)
+        open_controllers.append(gamepad)
+        print(f"Player {index + 1} Connected: {controller_info['name']}")
 
-    # 3. Inicia a escuta do controle
+    print("\nAll done! Lets go!!")
+
+    # 3. O Loop Duplo
     while True:
-        data = gamepad.read(64)
-        if data:
-            process_inputs(data)
+        # Passa por cada controle aberto e lê os dados
+        for player_id, gamepad in enumerate(open_controllers):
+            data = gamepad.read(64)
+            if data:
+                process_inputs(data, player_id)
+                
         time.sleep(0.005)
 
 except IOError as ex:
-    print(f"Error: Controller not found. {ex}")
+    print(f"Connection error: {ex}")
 except KeyboardInterrupt:
-    print("\nProgram terminated.")
+    print("\nProgram finished")
 finally:
-    if 'gamepad' in locals():
+    # Fecha todos os controles com segurança
+    for gamepad in open_controllers:
         gamepad.close()
+
+        
