@@ -1,4 +1,3 @@
-```markdown
 # Generic USB Controller Translator (macOS)
 
 A lightweight Python software that reads raw USB HID data from generic gamepads (like cheap SNES USB clones) and translates them into continuous keyboard inputs. 
@@ -19,10 +18,9 @@ Because this script simulates a virtual keyboard on macOS, you need a few system
 1. **Python 3.x** installed.
 2. **Homebrew** (macOS package manager).
 3. **C-Level HID Library:** macOS requires the underlying C library to read raw USB data.
-   ```bash
    brew install hidapi
 
-```
+
 
 ## Installation
 
