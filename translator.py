@@ -9,12 +9,12 @@ keyboard_controller = Controller()
 # 1. MAPAS DE TECLAS (Player 1 e Player 2)
 # ---------------------------------------------------------
 MAPS_PER_PLAYER = [
-    { # PLAYER 1 (Exatamente como você já tinha)
+    { # PLAYER 1
         'up': 'w', 'down': 's', 'left': 'a', 'right': 'd',
         'A': 'l', 'B': 'k', 'X': 'i', 'Y': 'j',
         'L': 'q', 'R': 'e', 'start': Key.enter, 'select': Key.space
     },
-    { # PLAYER 2 (Use as setinhas do teclado e outras letras)
+    { # PLAYER 2
         'up': Key.up, 'down': Key.down, 'left': Key.left, 'right': Key.right,
         'A': 'v', 'B': 'c', 'X': 'f', 'Y': 'x',
         'L': '1', 'R': '2', 'start': '3', 'select': '4'
@@ -37,7 +37,7 @@ def process_inputs(report, player_id):
     player_previous_state = previous_state[player_id]
     key_map = MAPS_PER_PLAYER[player_id]
 
-    # Lê os botões (A lógica matemática é igualzinha!)
+    # Lê os botões
     player_current_state['left']  = (report[3] == 0)
     player_current_state['right'] = (report[3] == 255)
     player_current_state['up']    = (report[4] == 0)
