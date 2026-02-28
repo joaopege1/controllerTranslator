@@ -90,4 +90,3 @@ KEY_MAP = {
 * **The terminal says "Pressed" but the game isn't responding:** You haven't granted Accessibility permissions in macOS System Settings.
 * **The character only moves one step when I hold the D-pad:** Ensure you are using the latest version of `main.py` which includes the "Forced Hold" logic (bypassing macOS's default key-repeat disabling).
 
-```
