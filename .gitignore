@@ -1,0 +1,17 @@
+# Ambientes Virtuais (NUNCA comite a pasta .venv, ela tem milhares de arquivos)
+.venv/
+venv/
+env/
+
+# Arquivos temporários e de cache do Python
+__pycache__/
+*.pyc
+.DS_Store
+
+# Pastas de compilação do PyInstaller
+build/
+dist/
+*.spec
+
+# Perfis locais de controles (Cada usuário deve gerar o seu)
+profiles.json
