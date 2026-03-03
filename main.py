@@ -1,30 +1,29 @@
 import sys
 import os
+import json
 import threading
-from pathlib import Path
 import customtkinter as ctk
 
-# Adiciona o diretório pai ao path para importar as engines
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-# Tenta importar as engines. Se falhar, cria mocks para a UI abrir e testar o visual.
 try:
     from engines import configurator
     from engines import translator
+    from engines.controllerGetter import detect_controllers
     ENGINES_LOADED = True
-    
-    # A FONTE DA VERDADE: O frontend usa EXATAMENTE o mesmo caminho que o backend gerou
-    PATH_JSON = configurator.PATH_JSON 
-    
+    PATH_JSON = configurator.PATH_JSON
+
 except ImportError:
     print("WARNING: Engines not found. Running UI test only mode.")
     ENGINES_LOADED = False
-    PATH_JSON = "profiles.json" # Caminho falso para modo de teste
-    
+    PATH_JSON = "profiles.json"
+
+    def detect_controllers():
+        return []
+
     class MockEngine:
         is_running = False
         def start_multiplayer_calibration(self): pass
         def start_translator(self): pass
+
     configurator = MockEngine()
     translator = MockEngine()
 
@@ -48,7 +47,6 @@ except:
 # PARSER DO TERMINAL (O Cérebro Visual)
 # -------------------------------------------------------------
 class RetroTerminalParser:
-    """Intercepta os prints e decide onde mostrá-los na nova UI."""
     def __init__(self, app_gui):
         self.app_gui = app_gui
         self.buffer = ""
@@ -92,6 +90,10 @@ class RetroTerminalParser:
             self.app_gui.is_busy = False # Libera a interface ao terminar a calibração
             self.app_gui.after(0, self.app_gui.show_action_screen, "CALIBRATION DONE", FG_GREEN)
 
+        elif "SETTING UP PLAYER" in line:
+            player_num = line.split("PLAYER")[-1].strip().replace("-", "").strip()
+            self.app_gui.after(0, self.app_gui.show_action_screen, f"PLAYER {player_num}", FG_CYAN)
+
         elif "Starting Configuration" in line:
             self.app_gui.after(0, self.app_gui.update_sidebar_status, "CALIBRATING...", FG_CYAN)
             self.app_gui.after(0, self.app_gui.show_action_screen, "INITIALIZING...", FG_GRAY)
@@ -107,7 +109,7 @@ class RetroTerminalParser:
 
         elif "stopped" in line.lower() and "calib" not in line.lower():
              self.app_gui.is_busy = False # Libera a interface ao apertar Stop
-             self.app_gui.after(0, self.app_gui.show_action_screen, "SYSTEM HALTED", FG_RED)
+             self.app_gui.after(0, self.app_gui.show_action_screen, "SYSTEM STOPPED", FG_RED)
 
 
 # -------------------------------------------------------------
@@ -131,6 +133,7 @@ class UniversalGamepadUI(ctk.CTk):
         sys.stdout = RetroTerminalParser(self)
         
         print("--- SYSTEM BOOT SEQUENCE INITIATED ---")
+        print("--- CREATOR:  github.com/joaopege1 ---")
         print(f"OS detected: {sys.platform}")
         print(f"Targeting profile path: {PATH_JSON}")
         
@@ -149,18 +152,27 @@ class UniversalGamepadUI(ctk.CTk):
         self.grid_columnconfigure(0, weight=0, minsize=260) 
         self.grid_columnconfigure(1, weight=1) 
         self.grid_rowconfigure(0, weight=1)
-
+        
         # ================== SIDEBAR (ESQUERDA) ==================
         self.sidebar = ctk.CTkFrame(self, fg_color=PANEL_BG, corner_radius=0, border_width=2, border_color="#222222")
         self.sidebar.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
-        
+
         title_lbl = ctk.CTkLabel(
             self.sidebar, 
-            text="UNIVERSAL\nCONTROLLER\n[HUB v2.1]", 
-            font=ctk.CTkFont(family=FONT_FAMILY, size=18, weight="bold"),
+            text="UNIVERSAL\nCONTROLLER", 
+            font=ctk.CTkFont(family=FONT_FAMILY, size=24, weight="bold"),
             text_color=FG_GREEN, justify="left"
         )
         title_lbl.pack(pady=(20, 15), padx=20, anchor="w")
+
+        # Label de Controle de Controles
+        # Verifica quantos controles estão conectados
+        self.control_lbl = ctk.CTkLabel(
+            self.sidebar, 
+            font=ctk.CTkFont(family=FONT_FAMILY, size=17, weight="bold"),
+            text_color=FG_CYAN, justify="left"
+        )
+        self.control_lbl.pack(pady=(20, 15), padx=20, anchor="w")
 
         # Caixa de Status do Sistema
         self.status_box = ctk.CTkFrame(self.sidebar, fg_color="#0a0a0a", border_width=2, border_color=FG_GRAY, corner_radius=0)
@@ -198,13 +210,13 @@ class UniversalGamepadUI(ctk.CTk):
         )
         self.btn_start.pack(fill="x", padx=15, pady=(0, 15))
 
-        self.btn_halt = ctk.CTkButton(
-            self.sidebar, text="/// EMERGENCY HALT ///", 
+        self.btn_stop = ctk.CTkButton(
+            self.sidebar, text="/// EMERGENCY STOP ///", 
             command=self.emergency_stop,
             border_color=FG_RED, text_color=FG_RED, hover_color="#220000",
             **btn_style
         )
-        self.btn_halt.pack(side="bottom", fill="x", padx=15, pady=20)
+        self.btn_stop.pack(side="bottom", fill="x", padx=15, pady=20)
 
         # ================== MONITORES (DIREITA) ==================
         self.right_panel = ctk.CTkFrame(self, fg_color="transparent")
@@ -243,21 +255,42 @@ class UniversalGamepadUI(ctk.CTk):
     # LÓGICA DE UPDATE DA UI (Heartbeat System 2.0)
     # -------------------------------------------------------------
     def check_system_health(self):
-        """Monitora o arquivo baseando-se no estado exclusivo da UI."""
-        # Se você clicou em algum botão e a interface assumiu que está ocupada, 
-        # ela pausa a atualização visual para não piscar no meio do jogo.
         if not self.is_busy:
+            controllers = detect_controllers()
+            no_controller = len(controllers) == 0
+            self.control_lbl.configure(text=f"[{len(controllers)} CONTROLLERS FOUND]")
+
+            calibrated_count = 0
             if os.path.exists(PATH_JSON):
+                try:
+                    with open(PATH_JSON) as f:
+                        calibrated_count = len(json.load(f))
+                except (json.JSONDecodeError, OSError):
+                    calibrated_count = 0
+
+            if no_controller:
+                self.update_sidebar_status("NO CONTROLLER DETECTED", FG_RED)
+                self.status_box.configure(border_color=FG_RED)
+                self.btn_start.configure(state="disabled", border_color=FG_GRAY, text_color=FG_GRAY)
+                self.btn_calib.configure(state="disabled", fg_color="transparent", border_color=FG_GRAY, text_color=FG_GRAY)
+            elif calibrated_count >= len(controllers):
                 self.update_sidebar_status("SYSTEM READY", FG_GREEN)
                 self.status_box.configure(border_color=FG_GREEN)
                 self.btn_start.configure(state="normal", fg_color="transparent", text_color=FG_GREEN, border_color=FG_GREEN)
-                self.btn_calib.configure(fg_color="transparent", text_color=FG_CYAN, border_color=FG_CYAN)
+                self.btn_calib.configure(state="normal", fg_color="transparent", text_color=FG_CYAN, border_color=FG_CYAN)
+            elif calibrated_count > 0:
+                # Alguns controles calibrados, mas não todos os conectados
+                self.update_sidebar_status(f"PARTIAL CALIB [{calibrated_count}/{len(controllers)}]", FG_YELLOW)
+                self.status_box.configure(border_color=FG_YELLOW)
+                self.btn_start.configure(state="disabled", border_color=FG_GRAY, text_color=FG_GRAY)
+                self.btn_calib.configure(state="normal", fg_color="#222200", border_color=FG_YELLOW, text_color=FG_YELLOW)
             else:
                 self.update_sidebar_status("CALIBRATION REQUIRED", FG_YELLOW)
                 self.status_box.configure(border_color=FG_YELLOW)
                 self.btn_start.configure(state="disabled", border_color=FG_GRAY, text_color=FG_GRAY)
-                self.btn_calib.configure(fg_color="#222200", border_color=FG_YELLOW, text_color=FG_YELLOW)
-        
+                self.btn_calib.configure(state="normal", fg_color="#222200", border_color=FG_YELLOW, text_color=FG_YELLOW)
+
+
         # Chama a si mesmo a cada 1 segundo indefinidamente
         self.after(1000, self.check_system_health)
 
@@ -308,3 +341,4 @@ class UniversalGamepadUI(ctk.CTk):
 if __name__ == "__main__":
     app = UniversalGamepadUI()
     app.mainloop()
+    

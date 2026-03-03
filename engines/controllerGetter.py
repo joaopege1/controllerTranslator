@@ -24,6 +24,5 @@ def detect_controllers():
                     'path': usb_path,
                     'name': real_name
                 })
-            
-    print(f"{len(found_controllers)} controller found!\n")
+
     return found_controllers

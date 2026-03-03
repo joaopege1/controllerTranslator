@@ -1,23 +1,16 @@
 import sys
-import os
 import hid
 import time
 import json
+from pathlib import Path
 from .controllerGetter import detect_controllers
 
-def get_path_profile():
+def get_path_profile() -> Path:
     if getattr(sys, 'frozen', False):
-        # Se estiver a correr como um .app (PyInstaller no Mac)
-        # O executável fica escondido em "UniversalGamepad.app/Contents/MacOS/app"
-        # Precisamos de recuar 3 pastas para ficar ao lado do ícone da aplicação
-        path_app = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(sys.executable))))
-        return os.path.join(path_app, 'profiles.json')
-    else:
-        # Se estiver a correr normalmente no terminal (.py)
-        path_script = os.path.dirname(os.path.abspath(__file__))
-        return os.path.join(path_script, 'profiles.json')
+        # .app bundle: executable está em UniversalGamepad.app/Contents/MacOS/app/
+        return Path(sys.executable).parents[3] / 'profiles.json'
+    return Path(__file__).parent / 'profiles.json'
 
-# Guardamos o caminho correto nesta variável para usar no resto do código
 PATH_JSON = get_path_profile()
 
 BUTTONS_TO_MAP = ['up', 'down', 'left', 'right', 'A', 'B', 'X', 'Y', 'L', 'R', 'select', 'start']
@@ -37,14 +30,26 @@ def start_multiplayer_calibration():
         return
 
     controllers_to_map = controllers[:2]
+
     all_profiles = []
+    if PATH_JSON.exists():
+        try:
+            with open(PATH_JSON) as f:
+                all_profiles = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            all_profiles = []
 
     for player_id, target_controller in enumerate(controllers_to_map):
-        if not is_running: break # Para se o usuário apertar Stop
-        
+        if not is_running: break
+
+        if player_id < len(all_profiles) and all_profiles[player_id]:
+            print(f"\n--- PLAYER {player_id + 1} already calibrated, skipping. ---")
+            continue
+
         print(f"\n--- SETTING UP PLAYER {player_id + 1} ---")
         print(f"Device: {target_controller['name']}")
         
+        gamepad = None
         try:
             gamepad = hid.device()
             gamepad.open_path(target_controller['path'])
@@ -78,10 +83,10 @@ def start_multiplayer_calibration():
                 while is_running:
                     current_data = gamepad.read(64)
                     if current_data and current_data != idle_state:
-                        for index in range(len(idle_state)):
-                            if current_data[index] != idle_state[index]:
-                                target_index = index # Salvamos o índice específico!
-                                changed_mask = current_data[index] ^ idle_state[index]
+                        for index, idle_val in enumerate(idle_state):
+                            if current_data[index] != idle_val:
+                                target_index = index
+                                changed_mask = current_data[index] ^ idle_val
                                 player_profile[button] = {
                                     "index": index,
                                     "idle_value": idle_state[index],
@@ -110,12 +115,14 @@ def start_multiplayer_calibration():
                     
                 print("-" * 30)
 
-            all_profiles.append(player_profile)
+            while len(all_profiles) <= player_id:
+                all_profiles.append({})
+            all_profiles[player_id] = player_profile
 
         except Exception as e:
             print(f"Error setting up Player {player_id + 1}: {e}")
         finally:
-            if 'gamepad' in locals():
+            if gamepad is not None:
                 gamepad.close()
 
     if is_running: # Só salva se a pessoa não apertou Stop no meio do caminho
